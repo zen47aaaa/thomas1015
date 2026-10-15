@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>聲控解謎：成語大冒險</title>
+  <style>
+    :root {
+      --primary-color: #4a90e2;
+      --secondary-color: #f5a623;
+      --success-color: #7ed321;
+      --bg-color: #f0f4f8;
+      --card-bg: #ffffff;
+    }
+
+    body {
+      font-family: "PingFang TC", "Microsoft JhengHei", sans-serif;
+      background-color: var(--bg-color);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .game-container {
+      background-color: var(--card-bg);
+      border-radius: 20px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+      width: 100%;
+      max-width: 600px;
+      padding: 30px;
+      text-align: center;
+      box-sizing: border-box;
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+    }
+
+    .level-info {
+      font-size: 1.2rem;
+      color: #666;
+      margin-bottom: 20px;
+    }
+
+    .hint-box {
+      background-color: #eef6ff;
+      border-left: 5px solid var(--primary-color);
+      padding: 15px;
+      border-radius: 5px;
+      margin-bottom: 25px;
+      text-align: left;
+      font-size: 1.1rem;
+      color: #444;
+    }
+
+    /* 成語字塊區域 */
+    .idiom-display {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 30px;
+    }
+
+    .char-box {
+      width: 65px;
+      height: 65px;
+      border: 3px solid #ccc;
+      border-radius: 12px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 2rem;
+      font-weight: bold;
+      color: #333;
+      background-color: #fafafa;
+      transition: all 0.5s ease;
+    }
+
+    /* 缺字狀態 */
+    .char-box.missing {
+      border: 3px dashed var(--secondary-color);
+      background-color: #fff9e6;
+      color: transparent;
+    }
+
+    /* 答對補齊與發光特效 */
+    .char-box.revealed {
+      border-color: var(--success-color);
+      background-color: #eefb11;
+      color: #2b580c;
+      box-shadow: 0 0 20px #7ed321;
+      transform: scale(1.1);
+    }
+
+    /* 控制按鈕區 */
+    .controls {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      padding: 12px 24px;
+      font-size: 1rem;
+      font-weight: bold;
+      border: none;
+      border-radius: 30px;
+      cursor: pointer;
+      transition: transform 0.2s, background-color 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    button:active {
+      transform: scale(0.95);
+    }
+
+    .btn-demo {
+      background-color: var(--primary-color);
+      color: white;
+    }
+
+    .btn-mic {
+      background-color: var(--secondary-color);
+      color: white;
+    }
+
+    .btn-mic.listening {
+      background-color: #e74c3c;
+      animation: pulse 1.5s infinite;
+    }
+
+    .btn-next {
+      background-color: #9b59b6;
+      color: white;
+      display: none;
+    }
+
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
+      70% { box-shadow: 0 0 0 15px rgba(231, 76, 60, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
+    }
+
+    .status-text {
+      min-height: 24px;
+      font-size: 1rem;
+      color: #666;
+      margin-top: 10px;
+    }
+
+    .recognized-text {
+      font-size: 0.9rem;
+      color: #888;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="game-container">
+  <h1>🎙️ 聲控解謎成語大冒險</h1>
+  <div class="level-info" id="levelInfo">關卡 1 / 5</div>
+
+  <div class="hint-box" id="hintBox">
+    提示：讀取中...
+  </div>
+
+  <div class="idiom-display" id="idiomDisplay">
+    <!-- 成語字塊會動態生成 -->
+  </div>
+
+  <div class="controls">
+    <button class="btn-demo" onclick="playDemo()">🔊 標準示範音檔</button>
+    <button class="btn-mic" id="micBtn" onclick="toggleRecognition()">🎤 開始朗讀</button>
+    <button class="btn-next" id="nextBtn" onclick="nextQuestion()">下一關 ➔</button>
+  </div>
+
+  <div class="status-text" id="statusText">點擊「開始朗讀」後，唸出完整的成語！</div>
+  <div class="recognized-text" id="recognizedText">系統接收到的語音：---</div>
+</div>
+
+<script>
+  // 適用於國小中高年級的常用成語辭庫
+  const idiomBank = [
+    { idiom: "守株待兔", missingIndex: 3, hint: "比喻拘泥守舊，不知變通，或企圖不勞而獲。" },
+    { idiom: "畫蛇添足", missingIndex: 3, hint: "比喻多此一舉，反而將事情弄糟糕。" },
+    { idiom: "井底之蛙", missingIndex: 3, hint: "比喻見識淺薄，眼界狹小的人。" },
+    { idiom: "臥薪嘗膽", missingIndex: 2, hint: "比喻刻苦自勵，立志雪恥復國。" },
+    { idiom: "胸有成竹", missingIndex: 2, hint: "比喻處事很有把握或很有準備。" },
+    { idiom: "掩耳盜鈴", missingIndex: 3, hint: "比喻妄想欺騙他人，結果卻只是欺騙自己。" },
+    { idiom: "亡羊補牢", missingIndex: 3, hint: "比喻犯錯或受損後及時補救，還算來得及。" }
+  ];
+
+  let currentLevel = 0;
+  let recognition = null;
+  let isListening = false;
+  let isCleared = false;
+
+  // 初始化語音辨識
+  function initSpeechRecognition() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    
+    if (!SpeechRecognition) {
+      alert("您的瀏覽器不支援 Web Speech API，建議使用 Google Chrome 瀏覽器！");
+      return;
+    }
+
+    recognition = new SpeechRecognition();
+    recognition.lang = 'zh-TW'; // 設定繁體中文
+    recognition.continuous = false; // 唸完一句即結束
+    recognition.interimResults = true; // 顯示即時辨識結果
+
+    recognition.onstart = () => {
+      isListening = true;
+      const micBtn = document.getElementById("micBtn");
+      micBtn.classList.add("listening");
+      micBtn.innerText = "🛑 正在聆聽...";
+      document.getElementById("statusText").innerText = "請清楚唸出完整的成語...";
+    };
+
+    recognition.onresult = (event) => {
+      let transcript = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+      
+      // 清除標點符號與空白
+      const cleanTranscript = transcript.replace(/[^\u4e00-\u9fa5]/g, "");
+      document.getElementById("recognizedText").innerText = `系統接收到的語音：${cleanTranscript}`;
+
+      // 檢查是否辨識到完整成語
+      const currentData = idiomBank[currentLevel];
+      if (cleanTranscript.includes(currentData.idiom) && !isCleared) {
+        handleSuccess();
+      }
+    };
+
+    recognition.onerror = (event) => {
+      console.error("語音辨識錯誤:", event.error);
+      document.getElementById("statusText").innerText = "辨識失敗，請再試一次。";
+      stopListening();
+    };
+
+    recognition.onend = () => {
+      stopListening();
+    };
+  }
+
+  // 載入關卡
+  function loadLevel() {
+    isCleared = false;
+    const currentData = idiomBank[currentLevel];
+    
+    // 更新介面文字
+    document.getElementById("levelInfo").innerText = `關卡 ${currentLevel + 1} / ${idiomBank.length}`;
+    document.getElementById("hintBox").innerText = `💡 釋義提示：${currentData.hint}`;
+    document.getElementById("statusText").innerText = "點擊「開始朗讀」後，唸出完整的成語！";
+    document.getElementById("recognizedText").innerText = "系統接收到的語音：---";
+    document.getElementById("nextBtn").style.display = "none";
+
+    // 渲染字塊
+    const display = document.getElementById("idiomDisplay");
+    display.innerHTML = "";
+
+    for (let i = 0; i < currentData.idiom.length; i++) {
+      const charBox = document.createElement("div");
+      charBox.classList.add("char-box");
+      charBox.id = `char-${i}`;
+
+      if (i === currentData.missingIndex) {
+        charBox.classList.add("missing");
+        charBox.innerText = "?";
+      } else {
+        charBox.innerText = currentData.idiom[i];
+      }
+      display.appendChild(charBox);
+    }
+  }
+
+  // 播放示範發音 (Text-to-Speech)
+  function playDemo() {
+    const currentData = idiomBank[currentLevel];
+    window.speechSynthesis.cancel(); // 停止先前的發音
+
+    const utterance = new SpeechSynthesisUtterance(currentData.idiom);
+    utterance.lang = "zh-TW";
+    utterance.rate = 0.8; // 稍微放慢速度讓學童聽清楚
+    window.speechSynthesis.speak(utterance);
+
+    document.getElementById("statusText").innerText = "🔊 正在播放示範發音...";
+  }
+
+  // 開啟 / 關閉 麥克風辨識
+  function toggleRecognition() {
+    if (!recognition) return;
+
+    if (isListening) {
+      recognition.stop();
+    } else {
+      window.speechSynthesis.cancel(); // 避免播報聲干擾辨識
+      recognition.start();
+    }
+  }
+
+  function stopListening() {
+    isListening = false;
+    const micBtn = document.getElementById("micBtn");
+    micBtn.classList.remove("listening");
+    micBtn.innerText = "🎤 開始朗讀";
+  }
+
+  // 成功答對觸發過關動畫與邏輯
+  function handleSuccess() {
+    isCleared = true;
+    if (recognition) recognition.stop();
+
+    const currentData = idiomBank[currentLevel];
+    const missingBox = document.getElementById(`char-${currentData.missingIndex}`);
+
+    // 觸發發光補齊動畫
+    missingBox.innerText = currentData.idiom[currentData.missingIndex];
+    missingBox.classList.remove("missing");
+    missingBox.classList.add("revealed");
+
+    document.getElementById("statusText").innerText = "🎉 太棒了！答對了！";
+    document.getElementById("nextBtn").style.display = "inline-block";
+
+    // 播放答對音效示範
+    const victoryUtterance = new SpeechSynthesisUtterance("答對了！太棒了！");
+    victoryUtterance.lang = "zh-TW";
+    window.speechSynthesis.speak(victoryUtterance);
+  }
+
+  // 下一關
+  function nextQuestion() {
+    currentLevel++;
+    if (currentLevel >= idiomBank.length) {
+      alert("🏆 恭喜你完成所有成語關卡！成為成語大師！");
+      currentLevel = 0; // 重置
+    }
+    loadLevel();
+  }
+
+  // 頁面載入後初始化
+  window.onload = () => {
+    initSpeechRecognition();
+    loadLevel();
+  };
+</script>
+
+</body>
+</html>
